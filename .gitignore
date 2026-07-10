@@ -1,0 +1,7 @@
+.vault_pass
+fetched/
+*.retry
+.vagrant/
+*.swp
+.DS_Store
+inventory/hosts.ini

@@ -1,0 +1,52 @@
+{#
+  /etc/rancher/rke2/config.yaml
+  Rendered by Ansible — DO NOT EDIT BY HAND.
+  All values come from group_vars/rke2_servers/{main,vault}.yml.
+#}
+# Managed by Ansible. Changes here are overwritten on the next run.
+
+# --- Cluster join secret (from ansible-vault) ------------------------------
+token: "{{ rke2_token }}"
+
+# --- kubeconfig permissions -------------------------------------------------
+write-kubeconfig-mode: "{{ rke2_write_kubeconfig_mode }}"
+
+# --- CNI --------------------------------------------------------------------
+# "none" means RKE2 will NOT deploy a bundled CNI. Calico is installed
+# afterward via Helm. Node stays NotReady until Calico is Running.
+cni: "{{ rke2_cni }}"
+
+# --- Networking -------------------------------------------------------------
+cluster-cidr: "{{ rke2_cluster_cidr }}"
+service-cidr: "{{ rke2_service_cidr }}"
+cluster-dns: "{{ rke2_cluster_dns }}"
+cluster-domain: "{{ rke2_cluster_domain }}"
+
+# --- TLS SANs ---------------------------------------------------------------
+tls-san:
+{% for san in rke2_tls_san %}
+  - "{{ san }}"
+{% endfor %}
+{% if rke2_node_labels | length > 0 %}
+
+# --- Node labels ------------------------------------------------------------
+node-label:
+{% for label in rke2_node_labels %}
+  - "{{ label }}"
+{% endfor %}
+{% endif %}
+{% if rke2_profile | length > 0 %}
+
+# --- CIS hardening profile --------------------------------------------------
+profile: "{{ rke2_profile }}"
+{% endif %}
+{% if rke2_enable_audit_log %}
+
+# --- API server audit logging -----------------------------------------------
+audit-policy-file: /etc/rancher/rke2/audit-policy.yaml
+kube-apiserver-arg:
+  - "audit-log-path={{ rke2_audit_log_path }}"
+  - "audit-log-maxage=30"
+  - "audit-log-maxbackup=10"
+  - "audit-log-maxsize=100"
+{% endif %}

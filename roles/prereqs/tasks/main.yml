@@ -1,0 +1,35 @@
+---
+# roles/prereqs/tasks/main.yml
+# Host-level preparation. Idempotent by design.
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb | default(0) | int > 0
+  changed_when: ansible_swaptotal_mb | default(0) | int > 0
+
+- name: Comment out swap entries in /etc/fstab (persist across reboot)
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\s+swap\s+.*)$'
+    replace: '# \1'
+
+- name: Load overlay and br_netfilter (and persist across reboots)
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Persist Kubernetes sysctl values
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: '1'
+    sysctl_file: /etc/sysctl.d/90-rke2.conf
+    sysctl_set: true
+    state: present
+  loop:
+    - net.bridge.bridge-nf-call-iptables
+    - net.bridge.bridge-nf-call-ip6tables
+    - net.ipv4.ip_forward

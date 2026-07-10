@@ -1,0 +1,57 @@
+---
+# roles/rke2_install/tasks/main.yml
+# Installs RKE2 via the official get.rke2.io script.
+# Idempotent: skips download+install when the binary is already present at
+# the correct version. The installer itself is safe to re-run, but skipping
+# keeps runs fast and makes --check output honest.
+
+- name: Check whether rke2 is already installed (either install path)
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/local/bin/rke2
+    - /usr/bin/rke2
+  register: rke2_binary_check
+
+- name: Set fact for whether rke2 is installed
+  ansible.builtin.set_fact:
+    rke2_installed: "{{ rke2_binary_check.results | selectattr('stat.exists') | list | length > 0 }}"
+
+- name: Get currently installed rke2 version (if any)
+  ansible.builtin.shell: "command -v rke2 && rke2 --version"
+  register: rke2_installed_version
+  changed_when: false
+  failed_when: false
+  when: rke2_installed
+
+- name: Download the official RKE2 install script
+  ansible.builtin.get_url:
+    url: https://get.rke2.io
+    dest: /usr/local/bin/rke2-install.sh
+    mode: "0755"
+    force: true
+  when: >
+    not rke2_installed
+    or (rke2_version | length > 0
+        and rke2_version not in (rke2_installed_version.stdout | default('')))
+
+- name: Run the RKE2 install script (server)
+  ansible.builtin.command: /usr/local/bin/rke2-install.sh
+  environment:
+    INSTALL_RKE2_TYPE: "server"
+    INSTALL_RKE2_CHANNEL: "{{ rke2_channel }}"
+    INSTALL_RKE2_VERSION: "{{ rke2_version }}"
+  register: rke2_install_run
+  changed_when: rke2_install_run.rc == 0
+  when: >
+    not rke2_installed
+    or (rke2_version | length > 0
+        and rke2_version not in (rke2_installed_version.stdout | default('')))
+
+# Enable but do NOT start yet — the config role writes config.yaml first,
+# then starts/restarts via its handler. This ordering avoids a first boot
+# with the wrong (default) configuration.
+- name: Enable rke2-server service (do not start before config is written)
+  ansible.builtin.systemd:
+    name: rke2-server.service
+    enabled: true

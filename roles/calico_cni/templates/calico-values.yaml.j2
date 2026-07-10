@@ -1,0 +1,12 @@
+{# Helm values for the tigera-operator (Calico) chart.
+   The Installation CR drives the dataplane and IP pool. #}
+# Managed by Ansible.
+installation:
+  enabled: true
+  calicoNetwork:
+    ipPools:
+      - name: default-ipv4-ippool
+        cidr: "{{ calico_pod_cidr }}"
+        encapsulation: "{{ calico_encapsulation }}"
+        natOutgoing: Enabled
+        nodeSelector: all()

@@ -1,0 +1,56 @@
+---
+# ===========================================================================
+# group_vars/rke2_servers/main.yml
+# All non-secret, externalized configuration. The vaulted join token lives
+# in vault.yml (encrypted with ansible-vault) and is referenced below.
+# ===========================================================================
+
+# --- Cluster join secret (from ansible-vault) ------------------------------
+rke2_token: "{{ vault_rke2_token }}"
+
+# --- RKE2 version ----------------------------------------------------------
+rke2_channel: "stable"
+rke2_version: ""            # empty = follow the channel
+
+# --- Networking (must stay consistent with the Calico install) -------------
+rke2_cluster_cidr: "10.42.0.0/16"
+rke2_service_cidr: "10.43.0.0/16"
+rke2_cluster_dns: "10.43.0.10"
+rke2_cluster_domain: "cluster.local"
+
+# --- CNI -------------------------------------------------------------------
+# "none" tells RKE2 NOT to install its bundled CNI (Canal). Calico is
+# installed afterward via the Helm module. Node stays NotReady until then.
+rke2_cni: "none"
+
+# --- TLS SANs --------------------------------------------------------------
+rke2_tls_san:
+  - "{{ ansible_host | default(ansible_default_ipv4.address) }}"
+  - "127.0.0.1"
+  - "rke2-node-1"
+
+# --- Security-first knobs --------------------------------------------------
+rke2_profile: ""                     # set to "cis" for full CIS hardening
+rke2_write_kubeconfig_mode: "0600"
+
+# API-server audit logging (defense in depth)
+rke2_enable_audit_log: true
+rke2_audit_log_path: "/var/lib/rancher/rke2/server/logs/audit.log"
+
+# Node labels
+rke2_node_labels:
+  - "node-role.cluster=single"
+
+# --- Where to drop the fetched kubeconfig on the control machine ----------
+rke2_kubeconfig_local_dir: "{{ playbook_dir }}/fetched"
+rke2_kubeconfig_local_path: "{{ rke2_kubeconfig_local_dir }}/rke2-{{ inventory_hostname }}.yaml"
+
+# --- Helm / Calico ---------------------------------------------------------
+helm_version: "v3.16.3"
+calico_chart_repo_name: "projectcalico"
+calico_chart_repo_url: "https://docs.tigera.io/calico/charts"
+calico_chart_name: "tigera-operator"
+calico_chart_version: "v3.29.1"
+calico_namespace: "tigera-operator"
+calico_pod_cidr: "{{ rke2_cluster_cidr }}"
+calico_encapsulation: "VXLANCrossSubnet"

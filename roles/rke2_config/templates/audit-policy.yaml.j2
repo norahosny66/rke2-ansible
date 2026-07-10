@@ -1,0 +1,10 @@
+{# /etc/rancher/rke2/audit-policy.yaml — minimal metadata-level audit policy #}
+# Managed by Ansible.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  # Don't log read-only, high-volume requests.
+  - level: None
+    verbs: ["get", "list", "watch"]
+  # Log everything else at Metadata level (who/what/when, no payloads).
+  - level: Metadata

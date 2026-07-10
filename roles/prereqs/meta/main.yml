@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: noura-hosny
+  role_name: prereqs
+  description: RKE2 single-node provisioning - prereqs role
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "9"
+    - name: Ubuntu
+      versions:
+        - jammy
+dependencies: []

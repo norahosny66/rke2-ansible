@@ -1,0 +1,28 @@
+---
+# site.yml — provision single-node RKE2 with Calico CNI.
+#
+#   ansible-playbook site.yml
+#
+# Role order:
+#   prereqs        host prep (packages, swap, kernel modules, sysctl)
+#   rke2_install   download + install the rke2 server binary (idempotent)
+#   rke2_config    template config.yaml; restart-on-change handler
+#   calico_cni     install Helm + deploy Calico post-bootstrap
+#   cluster_verify assert Ready node + Running Calico pods; fetch kubeconfig
+
+- name: Provision single-node RKE2 cluster with Calico
+  hosts: rke2_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: prereqs
+      tags: [prereqs]
+    - role: rke2_install
+      tags: [install]
+    - role: rke2_config
+      tags: [config]
+    - role: calico_cni
+      tags: [calico, cni]
+    - role: cluster_verify
+      tags: [verify]

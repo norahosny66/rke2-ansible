@@ -1,0 +1,78 @@
+---
+# roles/cluster_verify/tasks/main.yml
+# Confirms the cluster is healthy and retrieves the kubeconfig securely.
+
+- name: Wait for the node to report Ready
+  kubernetes.core.k8s_info:
+    kind: Node
+    kubeconfig: /etc/rancher/rke2/rke2.yaml
+  register: node_info
+  retries: 30
+  delay: 10
+  until: >
+    node_info.resources | length > 0
+    and (node_info.resources
+         | map(attribute='status.conditions')
+         | flatten
+         | selectattr('type', 'equalto', 'Ready')
+         | selectattr('status', 'equalto', 'True')
+         | list | length) > 0
+
+- name: Wait for all Calico pods to be Running
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: calico-system
+    kubeconfig: /etc/rancher/rke2/rke2.yaml
+  register: calico_pods
+  retries: 40
+  delay: 15
+  until: >
+    calico_pods.resources | length > 0
+    and (calico_pods.resources
+         | rejectattr('status.phase', 'equalto', 'Running')
+         | list | length) == 0
+
+- name: Run kubectl get nodes -o wide
+  ansible.builtin.command: >
+    /var/lib/rancher/rke2/bin/kubectl
+    --kubeconfig /etc/rancher/rke2/rke2.yaml
+    get nodes -o wide
+  register: nodes_wide
+  changed_when: false
+
+- name: Show node status
+  ansible.builtin.debug:
+    var: nodes_wide.stdout_lines
+
+- name: Show Calico pod status
+  ansible.builtin.debug:
+    msg: "{{ calico_pods.resources | map(attribute='metadata.name') | zip(calico_pods.resources | map(attribute='status.phase')) | list }}"
+
+# --- Securely retrieve the kubeconfig --------------------------------------
+- name: Ensure local fetch directory exists (control node)
+  ansible.builtin.file:
+    path: "{{ rke2_kubeconfig_local_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Read remote kubeconfig
+  ansible.builtin.slurp:
+    src: /etc/rancher/rke2/rke2.yaml
+  register: remote_kubeconfig
+
+- name: Write kubeconfig locally with server address rewritten to the node IP
+  ansible.builtin.copy:
+    content: "{{ remote_kubeconfig.content | b64decode | replace('127.0.0.1', ansible_host) }}"
+    dest: "{{ rke2_kubeconfig_local_path }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+
+- name: Report where the kubeconfig was stored
+  ansible.builtin.debug:
+    msg: >
+      Kubeconfig saved to {{ rke2_kubeconfig_local_path }} (mode 0600).
+      Use it with: KUBECONFIG={{ rke2_kubeconfig_local_path }} kubectl get nodes -o wide

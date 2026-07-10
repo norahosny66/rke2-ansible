@@ -1,0 +1,93 @@
+---
+# roles/calico_cni/tasks/main.yml
+# Post-bootstrap: install Helm, then deploy Calico via the kubernetes.core
+# helm module. Because config sets cni: none, the node stays NotReady until
+# this role finishes.
+- name: Ensure pip3 is available (needed for the pip module)
+  ansible.builtin.package:
+    name: python3-pip
+    state: present
+
+# --- Python deps for kubernetes.core modules -------------------------------
+- name: Install kubernetes python client (required by kubernetes.core modules)
+  ansible.builtin.pip:
+    name:
+      - kubernetes>=24.2.0
+      - PyYAML
+    state: present
+
+
+# --- Install Helm ----------------------------------------------------------
+- name: Check for existing helm binary
+  ansible.builtin.stat:
+    path: /usr/local/bin/helm
+  register: helm_bin
+
+- name: Get installed helm version
+  ansible.builtin.command: /usr/local/bin/helm version --short
+  register: helm_installed
+  changed_when: false
+  failed_when: false
+  when: helm_bin.stat.exists
+
+- name: Download Helm tarball
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    dest: "/tmp/helm-{{ helm_version }}.tar.gz"
+    mode: "0644"
+  when: not helm_bin.stat.exists or helm_version not in (helm_installed.stdout | default(''))
+
+- name: Extract Helm
+  ansible.builtin.unarchive:
+    src: "/tmp/helm-{{ helm_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: not helm_bin.stat.exists or helm_version not in (helm_installed.stdout | default(''))
+
+- name: Install Helm binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: /tmp/linux-amd64/helm
+    dest: /usr/local/bin/helm
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: not helm_bin.stat.exists or helm_version not in (helm_installed.stdout | default(''))
+
+# --- Make kubectl usable for later verification ----------------------------
+- name: Symlink rke2's kubectl into PATH
+  ansible.builtin.file:
+    src: /var/lib/rancher/rke2/bin/kubectl
+    dest: /usr/local/bin/kubectl
+    state: link
+    force: true
+
+# --- Deploy Calico via Helm -------------------------------------------------
+- name: Render Calico Helm values
+  ansible.builtin.template:
+    src: calico-values.yaml.j2
+    dest: /etc/rancher/rke2/calico-values.yaml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Add the Project Calico (Tigera) Helm repository
+  kubernetes.core.helm_repository:
+    name: "{{ calico_chart_repo_name }}"
+    repo_url: "{{ calico_chart_repo_url }}"
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+
+- name: Deploy Calico (tigera-operator) via Helm
+  kubernetes.core.helm:
+    name: calico
+    chart_ref: "{{ calico_chart_repo_name }}/{{ calico_chart_name }}"
+    chart_version: "{{ calico_chart_version }}"
+    release_namespace: "{{ calico_namespace }}"
+    create_namespace: true
+    values_files:
+      - /etc/rancher/rke2/calico-values.yaml
+    wait: true
+    wait_timeout: 600s
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml

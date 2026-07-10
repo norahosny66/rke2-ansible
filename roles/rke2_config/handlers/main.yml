@@ -1,0 +1,12 @@
+---
+# roles/rke2_config/handlers/main.yml
+# This handler runs ONLY when a task notifies it — meaning ONLY when the
+# templated config.yaml or audit policy actually changed. That is the
+# "restart only on config change" requirement.
+
+- name: Restart rke2-server
+  ansible.builtin.systemd:
+    name: rke2-server.service
+    state: restarted
+    enabled: true
+    daemon_reload: true

@@ -1,0 +1,67 @@
+---
+# roles/rke2_config/tasks/main.yml
+# Templates the RKE2 server config. The `notify` on the template tasks is
+# what satisfies the "restart only when config changes" requirement:
+# rke2-server is restarted ONLY when the template module reports `changed`.
+
+- name: Ensure RKE2 config directory exists
+  ansible.builtin.file:
+    path: /etc/rancher/rke2
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Ensure RKE2 server log directory exists (for audit log)
+  ansible.builtin.file:
+    path: "{{ rke2_audit_log_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when: rke2_enable_audit_log | bool
+
+- name: Render audit policy
+  ansible.builtin.template:
+    src: audit-policy.yaml.j2
+    dest: /etc/rancher/rke2/audit-policy.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when: rke2_enable_audit_log | bool
+  notify: Restart rke2-server
+
+- name: Render /etc/rancher/rke2/config.yaml from template
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart rke2-server
+
+# First run: service is enabled but not yet started. Handlers only fire on
+# change, so a cold first apply needs this. On subsequent runs this is a no-op
+# unless the service somehow stopped.
+- name: Ensure rke2-server is started
+  ansible.builtin.systemd:
+    name: rke2-server.service
+    state: started
+    enabled: true
+
+# Flush handlers now so any config-driven restart happens BEFORE later roles
+# (Calico) try to talk to the API server.
+- name: Apply pending rke2-server restarts before continuing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the Kubernetes API server to become reachable
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 6443
+    delay: 5
+    timeout: 300
+
+- name: Wait for admin kubeconfig to be generated
+  ansible.builtin.wait_for:
+    path: /etc/rancher/rke2/rke2.yaml
+    timeout: 180

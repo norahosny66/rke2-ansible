@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: noura-hosny
+  role_name: rke2_config
+  description: RKE2 single-node provisioning - rke2_config role
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "9"
+    - name: Ubuntu
+      versions:
+        - jammy
+dependencies: []
