@@ -48,7 +48,7 @@ roles/
 ansible-galaxy collection install -r requirements.yml
 
 # 2. rotate the vault password + token (demo values are placeholders!)
-echo 'your-real-vault-password' > .vault_pass && chmod 600 .vault_pass
+echo 'your-vault-password' > .vault_pass && chmod 600 .vault_pass
 ansible-vault edit group_vars/rke2_servers/vault.yml
 
 # 3. run
@@ -57,13 +57,3 @@ ansible-playbook site.yml
 # 4. use the fetched kubeconfig
 KUBECONFIG=fetched/rke2-rke2-node-1.yaml kubectl get nodes -o wide
 ```
-
-## Before you submit — TWO things to change
-
-1. **Rotate the vault password.** The `.vault_pass` file included here
-   contains `demo-vault-password-change-me`. Replace it with something real
-   and re-encrypt: `ansible-vault rekey group_vars/rke2_servers/vault.yml`.
-
-2. **Rotate the token.** The demo `vault_rke2_token` inside `vault.yml` is
-   also a placeholder. Edit and set a real long random string:
-   `ansible-vault edit group_vars/rke2_servers/vault.yml`.
